@@ -1,0 +1,5 @@
+# build leftovers when build.sh is run by hand
+dkms/src/
+dkms/ktree/
+dkms/src.*/
+dkms/make-xe.log
