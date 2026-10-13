@@ -27,6 +27,7 @@ detect_distro() {
 	id=$(. /etc/os-release 2>/dev/null; echo "${ID:-}")
 	like=$(. /etc/os-release 2>/dev/null; echo "${ID_LIKE:-}")
 	ZX_DISTRO=${id:-unknown}
+	ZX_DKMS_DISTRO=${like%% *}; ZX_DKMS_DISTRO=${ZX_DKMS_DISTRO:-$id}   # what dkms itself keys on (ID_LIKE[0], else ID)
 	case " $id $like " in
 	*" arch "*) ZX_FAMILY=arch ;;
 	*" debian "*|*ubuntu*|*" pop "*|*linuxmint*|*" mint "*) ZX_FAMILY=debian ;;
@@ -94,10 +95,19 @@ series_dir_for() {   # works from the project dir (dkms/series) and from the DKM
 
 # ---- initramfs -------------------------------------------------------------------------
 initramfs_tool() {
+	# Ubuntu 26.04 installs dracut by default (and a compat update-initramfs wrapper); systems
+	# upgraded from 24.04 keep initramfs-tools. Ask dpkg which one is the real generator.
 	if have mkinitcpio && [[ -f /etc/mkinitcpio.conf ]]; then echo mkinitcpio
-	elif have update-initramfs && [[ -d /etc/initramfs-tools ]]; then echo initramfs-tools
+	elif [[ $ZX_FAMILY == debian ]] && pkg_installed initramfs-tools && ! pkg_installed dracut; then echo initramfs-tools
 	elif have dracut; then echo dracut
+	elif have update-initramfs && [[ -d /etc/initramfs-tools ]]; then echo initramfs-tools
 	else echo none; fi
+}
+
+# Fedora's dkms package sets post_transaction="dracut --regenerate-all --force", so every
+# dkms install/remove already rebuilds all initramfs images.
+dkms_regenerates_initramfs() {
+	grep -hs '^[[:space:]]*post_transaction[[:space:]]*=' /etc/dkms/framework.conf /etc/dkms/framework.conf.d/*.conf 2>/dev/null | grep -q dracut
 }
 
 # Make sure "xe" is included by name, so the override under updates/ is what early KMS gets.
@@ -153,7 +163,8 @@ sb_enabled() {
 }
 
 # Key and certificate DKMS will sign with: "KEY CERT". Order: an explicit DKMS framework
-# setting, Ubuntu/Debian's shim-signed MOK, DKMS's own default (generated on first build).
+# setting; on Ubuntu (dkms distro "ubuntu*") the shim-signed MOK that dkms creates through
+# update-secureboot-policy; otherwise DKMS's own default (generated on first build).
 dkms_signing_files() {
 	local key= cert= f
 	for f in /etc/dkms/framework.conf /etc/dkms/framework.conf.d/*.conf; do
@@ -163,8 +174,8 @@ dkms_signing_files() {
 		c=$(sed -n 's/^[[:space:]]*mok_certificate[[:space:]]*=[[:space:]]*//p' "$f" | tail -n1 | tr -d '"'"'")
 		[[ -n $k ]] && key=$k; [[ -n $c ]] && cert=$c
 	done
-	if [[ -z $key && $ZX_FAMILY == debian && -f /var/lib/shim-signed/mok/MOK.priv ]]; then
-		key=/var/lib/shim-signed/mok/MOK.priv cert=/var/lib/shim-signed/mok/MOK.der
+	if [[ -z $key && ( $ZX_DKMS_DISTRO == ubuntu* || -f /var/lib/shim-signed/mok/MOK.priv ) ]]; then
+		key=/var/lib/shim-signed/mok/MOK.priv cert=${cert:-/var/lib/shim-signed/mok/MOK.der}
 	fi
 	echo "${key:-$ZX_DEFAULT_KEY} ${cert:-$ZX_DEFAULT_CERT}"
 }
@@ -179,4 +190,6 @@ mok_enrolled() { mokutil --test-key "$1" 2>&1 | grep -q 'already enrolled'; }   
 
 # ---- the running override -------------------------------------------------------------
 xe_module_path() { modinfo -n -k "${1:-$(uname -r)}" xe 2>/dev/null; }
-xe_is_override() { [[ $(xe_module_path "${1:-}") == */updates/* ]]; }
+# dkms installs under updates/dkms (Ubuntu, Arch) or extra/ (Fedora) and archives the stock
+# module in /var/lib/dkms/<name>/original_module/, so either path means ours is selected.
+xe_is_override() { local p; p=$(xe_module_path "${1:-}"); [[ $p == */updates/* || $p == */extra/* ]]; }

@@ -39,5 +39,7 @@ if (( DO_INITRAMFS )); then
 	info "regenerating the initramfs ($(initramfs_tool))..."
 	initramfs_regenerate
 fi
+# dkms_regenerates_initramfs (Fedora) already ran once at "dkms remove", before the snippet was
+# gone; the explicit run above makes the images match the configuration again.
 rm -rf "$ZX_STATE"
 ok "stock xe will be used after the next reboot: $(xe_module_path)"

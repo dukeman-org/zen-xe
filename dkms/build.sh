@@ -34,30 +34,50 @@ sdir=$(series_dir_for "$base") || true
 echo "zen-xe: kernel $kver (upstream base $base), series $(basename "$sdir")"
 
 # ---- 1. sources ------------------------------------------------------------------------
-# candidates "REPO TAG" in order of preference; the first that clones and matches wins
+# candidates "REPO TAG" in order of preference; the first that clones and matches wins.
+# Each distribution's own tree is used (Ubuntu's 7.0 carries drm backports from 6.18/7.1, and
+# with CONFIG_MODVERSIONS the symbol CRCs must match). kernel.org stable is tried only for a
+# kernel whose packaging we do not recognise.
 candidates=()
 case $kver in
 *-arch[0-9]*-*)
+	# Arch: 7.2.9-arch1-1 -> github.com/archlinux/linux tag v7.2.9-arch1 (PKGBUILD _srctag)
 	[[ $kver =~ -(arch[0-9]+)- ]] && candidates+=("https://github.com/archlinux/linux.git v$base-${BASH_REMATCH[1]}") ;;
 *.fc[0-9]*)
-	# Fedora: 7.2.9-300.fc44.x86_64 -> kernel-ark tag kernel-7.2.9-300.fc44
-	candidates+=("https://gitlab.com/cki-project/kernel-ark.git kernel-${kver%.x86_64}") ;;
-*-generic|*-lowlatency|*-oem|*-hwe*)
-	# Ubuntu: the launchpad tree tag is in /proc/version_signature only for the running kernel
-	if [[ $kver == "$(uname -r)" && -r /proc/version_signature ]]; then
-		sig=$(cut -d' ' -f2 /proc/version_signature)           # 7.0.0-23.23-generic
-		codename=$(. /etc/os-release; echo "${VERSION_CODENAME:-}")
-		[[ -n $codename ]] && candidates+=("https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/$codename Ubuntu-${sig%-*}")
+	# Fedora: 7.2.9-201.fc44.x86_64 -> kernel-ark tag kernel-7.2.9-1: the fcNN and the
+	# per-release hundreds (F43 1xx, F44 2xx, F45 3xx) are added at RPM build time only;
+	# rawhide 7.3.0-0.rc7.58.fc45 -> kernel-7.3.0-0.rc7.58 (release kept as is)
+	v=${kver%.x86_64}; v=${v%.fc[0-9]*}; rel=${v#*-}; v=${v%%-*}
+	[[ $rel =~ ^[0-9]+$ ]] && rel=$(( 10#$rel % 100 ))
+	candidates+=("https://gitlab.com/cki-project/kernel-ark.git kernel-$v-$rel") ;;
+*-generic|*-lowlatency|*-oem|*-hwe*|*-generic-64k)
+	# Ubuntu: the package version holds the upload number uname lacks: 7.0.0-38.38 (GA) or
+	# 7.0.0-38.38~24.04.4 (HWE). Tags: Ubuntu-7.0.0-38.38 in the launchpad tree of this release,
+	# Ubuntu-hwe-7.0-7.0.0-38.38_24.04.4 in the tree of the release the HWE kernel runs on.
+	pv=$(dpkg-query -W -f '${Version}' "linux-modules-$kver" 2>/dev/null || dpkg-query -W -f '${Version}' "linux-image-$kver" 2>/dev/null || true)
+	if [[ -z $pv && $kver == "$(uname -r)" && -r /proc/version_signature ]]; then
+		pv=$(cut -d' ' -f2 /proc/version_signature); pv=${pv%-*}       # Ubuntu 7.0.0-38.38-generic 7.0.14
+	fi
+	codename=$(. /etc/os-release 2>/dev/null; echo "${VERSION_CODENAME:-}")
+	if [[ -n $pv && -n $codename ]]; then
+		lp="https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/$codename"
+		if [[ $pv == *~* ]]; then
+			up=${pv%%-*}; candidates+=("$lp Ubuntu-hwe-${up%.*}-${pv%%~*}_${pv#*~}")
+		else
+			candidates+=("$lp Ubuntu-$pv")
+		fi
 	fi ;;
 esac
-candidates+=("https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git v$base")
+(( ${#candidates[@]} )) || candidates+=("https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git v$base")
 
 fetch_tree() {   # fetch_tree REPO TAG DEST -> 0 if DEST holds drivers/gpu/drm/{xe,i915} of TAG
 	local repo=$1 tag=$2 dest=$3 tmp
 	tmp=$(mktemp -d "$here/src.XXXXXX")
-	if git_net 900 -c advice.detachedHead=false clone -q --depth 1 --filter=blob:none --no-checkout --branch "$tag" "$repo" "$tmp" 2>"$tmp.log" &&
+	# launchpad ignores --filter ("filtering not recognized by server"): there the depth-1 clone is
+	# the whole tree (~280 MB), which is why the result is cached. github/gitlab send ~15 MB.
+	if git_net 1800 -c advice.detachedHead=false clone -q --depth 1 --filter=blob:none --no-checkout --branch "$tag" "$repo" "$tmp" 2>"$tmp.log" &&
 	   git -C "$tmp" sparse-checkout set --no-cone /drivers/gpu/drm/xe/ /drivers/gpu/drm/i915/ /Makefile 2>>"$tmp.log" &&
-	   git_net 900 -C "$tmp" checkout -q 2>>"$tmp.log" && [[ -d $tmp/drivers/gpu/drm/xe ]]; then
+	   git_net 1800 -C "$tmp" checkout -q 2>>"$tmp.log" && [[ -d $tmp/drivers/gpu/drm/xe ]]; then
 		git -C "$tmp" rev-parse HEAD >"$tmp/COMMIT"; echo "$repo $tag" >"$tmp/ORIGIN"
 		rm -rf "$tmp/.git" "$tmp.log"; mkdir -p "$(dirname "$dest")"; rm -rf "$dest"; mv "$tmp" "$dest"
 		return 0
@@ -124,5 +144,10 @@ grep -qiE 'modpost: .*(undefined|mismatch)' "$here/make-xe.log" && fail "modpost
 missing=$(comm -23 <(nm -u "$ko" | awk '{print $2}' | sed 's/^__crc_//' | sort -u) \
                    <(awk '{print $2}' "$kdir/Module.symvers" | sort -u) | grep -vE '^(__fentry__|__stack_chk_fail|__x86_return_thunk|__x86_indirect_thunk_|_printk|__fortify_panic|__ubsan)' || true)
 [[ -z $missing ]] || fail "module imports symbols this kernel does not export: $(echo "$missing" | tr '\n' ' ')"
+if grep -q '^CONFIG_MODVERSIONS=y' "$kdir/.config"; then
+	# Ubuntu: every imported symbol carries a CRC; a mismatch would make the module unloadable
+	bad=$(modprobe --dump-modversions "$ko" | awk 'NR==FNR { crc[$2]=$1; next } ($2 in crc) && crc[$2] != $1 { print $2 }' - "$kdir/Module.symvers" || true)
+	[[ -z $bad ]] || fail "symbol CRCs differ from this kernel's Module.symvers (wrong source tree?): $(echo "$bad" | head -n5 | tr '\n' ' ')"
+fi
 modinfo -p "$ko" | grep -q '^zenbook_duo_edp2_tcss:' || echo "zen-xe: note: this series has no eDP-2 TCSS patch" >&2
 echo "zen-xe: built $(sha256sum "$ko" | cut -c1-16) for $kver ($applied patches)"

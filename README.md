@@ -15,18 +15,24 @@ The 7.3 series needs only the bottom-screen fix; everything else is upstream the
 
 ## Supported
 
-* **Distributions:** Ubuntu 26.04, Arch Linux and the current Fedora release. That is what the scripts
-  know (apt / pacman / dnf, initramfs-tools / mkinitcpio / dracut, each distribution's kernel source
-  tree). Derivatives with the same package manager and kernel packages usually work unchanged.
+* **Distributions:** Ubuntu 26.04 (kernel 7.0, also the 24.04 HWE kernel), Arch Linux (7.2) and
+  Fedora 44 (7.2). That is what the scripts know: apt / pacman / dnf, dracut or initramfs-tools /
+  mkinitcpio / dracut, and each distribution's own kernel source tree. Derivatives with the same
+  package manager and kernel packages usually work unchanged. Only the Arch path has been run on real
+  hardware so far; the Ubuntu and Fedora paths follow each distribution's dkms and kernel packaging
+  conventions, and the patch series were verified to apply to Ubuntu's `7.0.0-38.38` and Fedora's
+  `kernel-7.2.9-1` trees.
 * **Kernels:** Linux 7.0, 7.1, 7.2 and 7.3 (one patch series per line in `dkms/series/`, each
   compile-tested; `NOTES.md` there records every backport decision). Linux 6.x has no working Panther
-  Lake display and is refused.
+  Lake display and is refused (that includes Arch `linux-lts`).
 * **Hardware:** ASUS Zenbook Duo UX8407AA (checked). `--any-hardware` allows other Panther Lake laptops:
   the VRR fixes are generic, the eDP-2 fix is untested elsewhere and can be turned off with
   `xe.zenbook_duo_edp2_tcss=0`.
 * **Secure Boot:** supported. DKMS signs the module with a Machine Owner Key; the installer creates one
   if needed and enrolls it with `mokutil` (one-time password, confirmed on the blue MOK screen at the
-  next boot). Ubuntu's existing shim-signed MOK is used when present.
+  next boot). On Ubuntu that is the shim-signed MOK (`/var/lib/shim-signed/mok/`, made and enrolled by
+  `update-secureboot-policy`); on Fedora and Arch it is dkms's own `/var/lib/dkms/mok.key` unless
+  `/etc/dkms/framework.conf` names another.
 
 ## Install
 
@@ -53,16 +59,27 @@ Owner Key stays (other DKMS modules may use it).
 ## How it works
 
 * `install.sh` registers `dkms/` as the DKMS package **zen-xe** and builds it for the running kernel.
-* `dkms/build.sh` fetches `drivers/gpu/drm/{xe,i915}` of the exact kernel being built for (sparse,
-  blob-filtered git clone, a few MB: `archlinux/linux` tag `vX.Y.Z-archN`, Fedora's `kernel-ark` tag
-  `kernel-X.Y.Z-N.fcNN`, Ubuntu's launchpad tree tag `Ubuntu-X.Y.0-N.M`, and kernel.org stable
-  `vX.Y.Z` as the fallback), applies `dkms/series/<X.Y>/series`, and builds `xe.ko` out of tree against
-  the installed headers. The result lands in `/lib/modules/<kernel>/updates/dkms/`, which depmod prefers over the stock
-  module on every mainstream distribution. The initramfs is told to include `xe` by name so early KMS
-  uses the patched driver.
+* `dkms/build.sh` fetches `drivers/gpu/drm/{xe,i915}` of the exact kernel being built for (sparse git
+  clone of the distribution's own tree, cached in `/var/cache/zen-xe`):
+  * Arch `7.2.9-arch1-1`: `github.com/archlinux/linux` tag `v7.2.9-arch1` (about 15 MB);
+  * Fedora `7.2.9-201.fc44`: `gitlab.com/cki-project/kernel-ark` tag `kernel-7.2.9-1` (the `.fc44` and
+    the per-release hundreds are added at RPM build time; about 15 MB);
+  * Ubuntu `7.0.0-38-generic`: the launchpad tree of the release, tag `Ubuntu-7.0.0-38.38` (HWE kernels:
+    `Ubuntu-hwe-7.0-7.0.0-38.38_24.04.4` in the running release's tree). Launchpad does not support
+    partial clones, so this one downloads about 280 MB once per kernel. Ubuntu's 7.0 carries drm
+    backports and builds with `CONFIG_MODVERSIONS`, so kernel.org sources would not do; the build also
+    checks every imported symbol's CRC against `Module.symvers`;
+  * kernel.org stable `vX.Y.Z` only for a kernel whose packaging is not recognised.
+
+  It then applies `dkms/series/<X.Y>/series` and builds `xe.ko` out of tree against the installed headers.
+  dkms installs the result under `/lib/modules/<kernel>/updates/dkms/` (Ubuntu, Arch) or `extra/`
+  (Fedora) and moves the stock `xe.ko` to `/var/lib/dkms/zen-xe/original_module/` (restored on removal),
+  so the patched module is the one depmod finds. The initramfs is told to include `xe` by name so early
+  KMS uses the patched driver.
 * On a kernel update DKMS rebuilds automatically before the initramfs is regenerated (Arch pacman
-  hooks, Fedora `kernel-install`, Ubuntu kernel postinst). If the build fails (no network, unknown
-  kernel), the stock xe is used and `./status.sh` says so.
+  hooks `70-dkms-install` then `90-mkinitcpio-install`, Fedora `kernel-install` plugins `40-dkms` then
+  `50-dracut`, Ubuntu `/etc/kernel/postinst.d/dkms` then `dracut` / `initramfs-tools`). If the build
+  fails (no network, unknown kernel), the stock xe is used and `./status.sh` says so.
 * The module parameter `xe.zenbook_duo_edp2_tcss=0` turns the eDP-2 fix off for one boot;
   `xe.enable_dc_balance=1` restores the VRR DC-balance behaviour.
 
@@ -90,7 +107,8 @@ there (see each `NOTES.md`).
   `cat /var/lib/dkms/zen-xe/*/build/make.log`. A failed source fetch (no network at kernel-update time)
   is fixed by `sudo dkms install zen-xe/<version>` later.
 * Secure Boot on and the module does not load (`modprobe: Key was rejected by service`): the MOK is not
-  enrolled; `sudo mokutil --import /var/lib/dkms/mok.pub` (or the key `status.sh` shows) and reboot.
+  enrolled; `sudo mokutil --import /var/lib/dkms/mok.pub` (Ubuntu: `sudo update-secureboot-policy
+  --enroll-key`) and reboot. `modinfo xe | grep signer` shows which certificate signed the module.
 * The bottom screen still fails: `journalctl -k -b | grep -E 'PHY B|DDI BUF B'` and open an issue with
   the output and `./status.sh`.
 * VRR: it is a separate mode on GNOME/KDE (`…@144+vrr`); when it is on, PSR is off on that panel while
