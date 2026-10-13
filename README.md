@@ -15,15 +15,18 @@ The 7.3 series needs only the bottom-screen fix; everything else is upstream the
 
 ## Supported
 
-* Hardware: ASUS Zenbook Duo UX8407AA (checked; `--any-hardware` for other Panther Lake laptops: the VRR
-  fixes are generic, the eDP-2 fix is untested elsewhere and can be turned off with `xe.zenbook_duo_edp2_tcss=0`).
-* Kernels: Linux 7.0, 7.1, 7.2 and 7.3 (one patch series per line in `dkms/series/`). Linux 6.x has no
-  working Panther Lake display and is refused.
-* Distributions: Arch / CachyOS / Manjaro (mkinitcpio), Fedora and openSUSE Tumbleweed (dracut),
-  Ubuntu / Debian / Mint / Pop!_OS (initramfs-tools). Anything else: install `dkms`, the kernel headers,
-  `git`, `patch` and `pahole`/`dwarves` yourself and the scripts do the rest.
-* Secure Boot: supported. DKMS signs the module with a Machine Owner Key; the installer creates one if
-  needed and enrolls it with `mokutil` (one-time password, confirmed on the blue MOK screen at the next boot).
+* **Distributions:** Ubuntu 26.04, Arch Linux and the current Fedora release. That is what the scripts
+  know (apt / pacman / dnf, initramfs-tools / mkinitcpio / dracut, each distribution's kernel source
+  tree). Derivatives with the same package manager and kernel packages usually work unchanged.
+* **Kernels:** Linux 7.0, 7.1, 7.2 and 7.3 (one patch series per line in `dkms/series/`, each
+  compile-tested; `NOTES.md` there records every backport decision). Linux 6.x has no working Panther
+  Lake display and is refused.
+* **Hardware:** ASUS Zenbook Duo UX8407AA (checked). `--any-hardware` allows other Panther Lake laptops:
+  the VRR fixes are generic, the eDP-2 fix is untested elsewhere and can be turned off with
+  `xe.zenbook_duo_edp2_tcss=0`.
+* **Secure Boot:** supported. DKMS signs the module with a Machine Owner Key; the installer creates one
+  if needed and enrolls it with `mokutil` (one-time password, confirmed on the blue MOK screen at the
+  next boot). Ubuntu's existing shim-signed MOK is used when present.
 
 ## Install
 
@@ -51,14 +54,15 @@ Owner Key stays (other DKMS modules may use it).
 
 * `install.sh` registers `dkms/` as the DKMS package **zen-xe** and builds it for the running kernel.
 * `dkms/build.sh` fetches `drivers/gpu/drm/{xe,i915}` of the exact kernel being built for (sparse,
-  blob-filtered git clone of the distribution's tree where one exists: `archlinux/linux`,
-  `CachyOS/linux`, `zen-kernel`, Fedora `kernel-ark`, Ubuntu's launchpad tree; kernel.org stable
-  otherwise), applies `dkms/series/<X.Y>/series`, and builds `xe.ko` out of tree against the installed
-  headers. The result lands in `/lib/modules/<kernel>/updates/dkms/`, which depmod prefers over the stock
+  blob-filtered git clone, a few MB: `archlinux/linux` tag `vX.Y.Z-archN`, Fedora's `kernel-ark` tag
+  `kernel-X.Y.Z-N.fcNN`, Ubuntu's launchpad tree tag `Ubuntu-X.Y.0-N.M`, and kernel.org stable
+  `vX.Y.Z` as the fallback), applies `dkms/series/<X.Y>/series`, and builds `xe.ko` out of tree against
+  the installed headers. The result lands in `/lib/modules/<kernel>/updates/dkms/`, which depmod prefers over the stock
   module on every mainstream distribution. The initramfs is told to include `xe` by name so early KMS
   uses the patched driver.
-* On a kernel update DKMS rebuilds automatically (Arch pacman hooks, Fedora `kernel-install`, Debian
-  kernel postinst). If the build fails, the stock xe is used and `./status.sh` says so.
+* On a kernel update DKMS rebuilds automatically before the initramfs is regenerated (Arch pacman
+  hooks, Fedora `kernel-install`, Ubuntu kernel postinst). If the build fails (no network, unknown
+  kernel), the stock xe is used and `./status.sh` says so.
 * The module parameter `xe.zenbook_duo_edp2_tcss=0` turns the eDP-2 fix off for one boot;
   `xe.enable_dc_balance=1` restores the VRR DC-balance behaviour.
 

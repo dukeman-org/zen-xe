@@ -39,11 +39,6 @@ candidates=()
 case $kver in
 *-arch[0-9]*-*)
 	[[ $kver =~ -(arch[0-9]+)- ]] && candidates+=("https://github.com/archlinux/linux.git v$base-${BASH_REMATCH[1]}") ;;
-*-zen[0-9]*-*)
-	[[ $kver =~ -(zen[0-9]+)- ]] && candidates+=("https://github.com/zen-kernel/zen-kernel.git v$base-${BASH_REMATCH[1]}") ;;
-*cachyos*)
-	tag=$(git_net 60 ls-remote --tags --refs https://github.com/CachyOS/linux.git "cachyos-$base-*" 2>/dev/null | sed 's|.*refs/tags/||' | sort -V | tail -n1 || true)
-	[[ -n $tag ]] && candidates+=("https://github.com/CachyOS/linux.git $tag") ;;
 *.fc[0-9]*)
 	# Fedora: 7.2.9-300.fc44.x86_64 -> kernel-ark tag kernel-7.2.9-300.fc44
 	candidates+=("https://gitlab.com/cki-project/kernel-ark.git kernel-${kver%.x86_64}") ;;

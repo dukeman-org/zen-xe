@@ -1,0 +1,11 @@
+# zen-xe patch series for Linux 7.0.y (see NOTES.md). One patch per line, applied in order with
+# patch -p1; an optional constraint after the name ("<7.2.10", ">=7.2.10") limits it to sublevels.
+0001-drm-i915-dsb-shift-delayed-vblank-DSL-wait-start-by-.patch
+0002-drm-i915-dsb-Use-safe-window-path-when-VRR-TG-is-use.patch
+0003-drm-i915-display-Ensure-a-non-zero-safe-window-from-.patch
+0004-drm-i915-vrr-Disable-DC-balance-by-default.patch
+0005-drm-i915-cx0-request-TCSS-power-for-the-non-TC-C20-P.patch
+0006-zenbook-duo-2026-linux-module-parameter-for-the-TCSS.patch
+0007-drm-i915-xe-Enable-HPD-polling-later-during-system-r.patch
+0008-drm-xe-Fix-shrinker-accounting-double-subtraction-on.patch
+0009-drm-i915-display-Mask-RO-bits-in-gen9_write_dc_state.patch

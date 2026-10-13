@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # zen-xe/lib/common.sh - helpers shared by install.sh, uninstall.sh, status.sh and the DKMS
-# post-install hook. Sourced, never run. Expects ZX_ROOT to be the project directory.
+# Sourced, never run. Expects ZX_ROOT to be the project directory (or the DKMS source directory).
 
 ZX_NAME=zen-xe
 ZX_VERSION=$(tr -d '[:space:]' <"$ZX_ROOT/VERSION")
@@ -21,17 +21,16 @@ have() { command -v "$1" >/dev/null 2>&1; }
 need_root() { (( EUID == 0 )) || die "run as root: sudo $0 $*"; }
 
 # ---- distribution ----------------------------------------------------------------------
-# ZX_FAMILY: arch | debian | fedora | suse | unknown (package manager + initramfs conventions)
+# ZX_FAMILY: arch | debian (Ubuntu) | fedora | unknown (package manager + initramfs conventions)
 detect_distro() {
 	local id like
 	id=$(. /etc/os-release 2>/dev/null; echo "${ID:-}")
 	like=$(. /etc/os-release 2>/dev/null; echo "${ID_LIKE:-}")
 	ZX_DISTRO=${id:-unknown}
 	case " $id $like " in
-	*" arch "*|*cachyos*|*manjaro*|*endeavouros*|*garuda*) ZX_FAMILY=arch ;;
+	*" arch "*) ZX_FAMILY=arch ;;
 	*" debian "*|*ubuntu*|*" pop "*|*linuxmint*|*" mint "*) ZX_FAMILY=debian ;;
 	*fedora*|*rhel*|*nobara*|*centos*) ZX_FAMILY=fedora ;;
-	*suse*) ZX_FAMILY=suse ;;
 	*) ZX_FAMILY=unknown ;;
 	esac
 }
@@ -42,7 +41,6 @@ pkg_install() {   # pkg_install PKG... (only the missing ones are installed)
 	arch)   pacman -S --needed --noconfirm "$@" ;;
 	debian) DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" ;;
 	fedora) dnf install -y "$@" ;;
-	suse)   zypper --non-interactive install --no-recommends "$@" ;;
 	*) die "install these packages yourself, then re-run: $*" ;;
 	esac
 }
@@ -51,7 +49,7 @@ pkg_installed() {   # pkg_installed PKG
 	case $ZX_FAMILY in
 	arch)   pacman -Q "$1" >/dev/null 2>&1 ;;
 	debian) dpkg-query -W -f '${Status}' "$1" 2>/dev/null | grep -q 'install ok installed' ;;
-	fedora|suse) rpm -q "$1" >/dev/null 2>&1 ;;
+	fedora) rpm -q "$1" >/dev/null 2>&1 ;;
 	*) return 1 ;;
 	esac
 }
@@ -67,7 +65,6 @@ headers_pkg() {
 	arch)   pkgbase=$(cat "/usr/lib/modules/$k/pkgbase" 2>/dev/null || echo linux); echo "$pkgbase-headers" ;;
 	debian) echo "linux-headers-$k" ;;
 	fedora) echo "kernel-devel-$k" ;;
-	suse)   echo "kernel-${k##*-}-devel" ;;
 	*)      echo "" ;;
 	esac
 }
@@ -100,7 +97,6 @@ initramfs_tool() {
 	if have mkinitcpio && [[ -f /etc/mkinitcpio.conf ]]; then echo mkinitcpio
 	elif have update-initramfs && [[ -d /etc/initramfs-tools ]]; then echo initramfs-tools
 	elif have dracut; then echo dracut
-	elif have booster; then echo booster
 	else echo none; fi
 }
 
@@ -121,9 +117,6 @@ CONF
 		;;
 	initramfs-tools)
 		grep -qx 'xe' /etc/initramfs-tools/modules 2>/dev/null || printf '# zen-xe: patched xe for early KMS\nxe\n' >>/etc/initramfs-tools/modules
-		;;
-	booster)
-		warn "booster: add 'modules_force_load: xe' to /etc/booster.yaml yourself"
 		;;
 	none) warn "no initramfs generator found; make sure your boot image contains the patched xe" ;;
 	esac
@@ -146,8 +139,6 @@ initramfs_regenerate() {
 		if [[ -n $k ]]; then dracut -f --kver "$k"; else dracut -f --regenerate-all; fi ;;
 	initramfs-tools)
 		update-initramfs -u -k "${k:-all}" ;;
-	booster)
-		if [[ -n $k ]]; then booster build -f --kernel-version "$k" "/boot/booster-$k.img"; else warn "booster: regenerate your images by hand"; fi ;;
 	none) warn "initramfs not regenerated (no generator found)" ;;
 	esac
 }
@@ -184,7 +175,7 @@ cert_der() {
 	local t; t=$(mktemp); openssl x509 -inform PEM -in "$1" -outform DER -out "$t" 2>/dev/null && echo "$t"
 }
 
-mok_enrolled() { mokutil --test-key "$1" 2>/dev/null | grep -q 'already enrolled'; }
+mok_enrolled() { mokutil --test-key "$1" 2>&1 | grep -q 'already enrolled'; }   # mokutil answers on stderr, exit 1
 
 # ---- the running override -------------------------------------------------------------
 xe_module_path() { modinfo -n -k "${1:-$(uname -r)}" xe 2>/dev/null; }

@@ -1,0 +1,4 @@
+# zen-xe patch series for Linux 7.3.y (see NOTES.md). One patch per line, applied in order with
+# patch -p1; an optional constraint after the name ("<7.2.10", ">=7.2.10") limits it to sublevels.
+0001-drm-i915-cx0-request-TCSS-power-for-the-non-TC-C20-P.patch
+0002-zenbook-duo-2026-linux-module-parameter-for-the-TCSS.patch

@@ -34,7 +34,7 @@ done
 need_root "$@"
 detect_distro
 info "${C_BOLD}zen-xe $ZX_VERSION${C_RESET}: patched Intel xe for the Zenbook Duo UX8407AA  (distribution: $ZX_DISTRO, family: $ZX_FAMILY)"
-[[ $ZX_FAMILY != unknown ]] || warn "unknown distribution: packages must already be installed (dkms, kernel headers, git, patch, pahole/dwarves)"
+[[ $ZX_FAMILY != unknown ]] || warn "not Ubuntu, Arch or Fedora: packages must already be installed (dkms, kernel headers, git, patch, pahole/dwarves)"
 
 # ---- 1. machine ------------------------------------------------------------------------
 gpu=$(lspci -n -d 8086: 2>/dev/null | awk '$2 ~ /^03/ {print $3}' | head -n1)
@@ -66,7 +66,6 @@ case $ZX_FAMILY in
 arch)   pk+=(pahole zstd) ;;
 debian) pk+=(dwarves build-essential zstd) ;;
 fedora) pk+=(dwarves gcc make elfutils-libelf-devel zstd) ;;
-suse)   pk+=(dwarves gcc make zstd) ;;
 esac
 sb_enabled && pk+=(mokutil openssl)
 hp=$(headers_pkg "$KVER")
