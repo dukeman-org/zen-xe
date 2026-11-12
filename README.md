@@ -95,7 +95,7 @@ Owner Key stays (other DKMS modules may use it).
    by the author of [zenbook-duo-2026-linux](https://github.com/burakgon/zenbook-duo-2026-linux))
 6. module parameter `zenbook_duo_edp2_tcss` (off switch / marker)
 7. `drm/i915/xe: Enable HPD polling later during system resume` (7.3)
-8. `drm/xe: Fix shrinker accounting double-subtraction on nested external pins` (7.3)
+8. `drm/xe: Fix shrinker accounting double-subtraction on nested external pins` (7.3, in stable from 7.2.11; applied only below 7.2.11)
 9. `drm/i915/display: Mask RO bits in gen9_write_dc_state()` (7.3)
 
 Other series directories hold the same fixes rebased on that kernel line, minus what is already upstream
