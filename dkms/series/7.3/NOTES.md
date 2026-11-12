@@ -35,3 +35,9 @@ Module.symvers does not list; none is referenced by the patches. Logs: build-log
 
 sha256 (unstripped drivers/gpu/drm/xe/xe.ko in series-work/7.3):
 22a9b310e4876a7aab26a0f2d21b7bc676f09a152a60c8cbb166a80aa7c45ff1
+
+## v7.3.4 (2026-11-12)
+
+Latest 7.3 stable at kernel.org; Arch still ships 7.2.15 (nothing newer in core-testing). Both
+patches apply to the v7.3.4 files (intel_cx0_phy.c, intel_tc.c, intel_tc.h from the stable tree)
+with patch -p1: 0001 hunks 2 and 3 at offset +2 lines, 0002 clean. No series change needed.

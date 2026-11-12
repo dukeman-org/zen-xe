@@ -187,6 +187,12 @@ cert_der() {
 }
 
 mok_enrolled() { mokutil --test-key "$1" 2>&1 | grep -q 'already enrolled'; }   # mokutil answers on stderr, exit 1
+# mok_pending DER: the certificate waits in MokNew for MokManager (mokutil --test-key calls that
+# "already enrolled" too, but it is trusted only after the blue screen at the next boot)
+mok_pending() {
+	local fp; fp=$(openssl x509 -inform DER -in "$1" -noout -fingerprint -sha1 2>/dev/null | sed 's/^[^=]*=//')
+	[[ -n $fp ]] && mokutil --list-new 2>/dev/null | grep -qiF "$fp"
+}
 
 # ---- the running override -------------------------------------------------------------
 xe_module_path() { modinfo -n -k "${1:-$(uname -r)}" xe 2>/dev/null; }

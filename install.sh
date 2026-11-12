@@ -110,7 +110,13 @@ if sb_enabled; then
 		touch "$ZX_STATE/wrote-dkms-conf"
 	fi
 	der=$(cert_der "$cert") || die "cannot read certificate $cert"
-	if mok_enrolled "$der"; then
+	if mok_pending "$der"; then
+		info "${C_BOLD}Secure Boot is on and the signing key waits for enrollment.${C_RESET}"
+		info "On the next boot a blue 'MOK management' screen appears: press a key, choose Enroll MOK ->"
+		info "Continue -> Yes, type the one-time password chosen at 'mokutil --import', reboot."
+		touch "$ZX_STATE/mok-enroll-pending"
+		warn "without the enrollment a kernel that enforces module signatures (lockdown, module.sig_enforce=1) rejects the module, and there is no xe driver at all"
+	elif mok_enrolled "$der"; then
 		ok "Secure Boot on; signing key $cert is enrolled"
 	else
 		info "${C_BOLD}Secure Boot is on and the signing key is not enrolled yet.${C_RESET}"
@@ -122,7 +128,7 @@ if sb_enabled; then
 			mokutil --import "$der" || die "mokutil --import failed"
 		fi
 		touch "$ZX_STATE/mok-enroll-pending"
-		warn "without the enrollment the signed module will not load and the stock xe is used"
+		warn "without the enrollment a kernel that enforces module signatures (lockdown, module.sig_enforce=1) rejects the module, and there is no xe driver at all"
 	fi
 else
 	ok "Secure Boot off (modules need no signature)"
@@ -131,7 +137,7 @@ fi
 # ---- 5. DKMS ---------------------------------------------------------------------------
 # the initramfs snippet first: Fedora's dkms regenerates every initramfs right after the install
 (( DO_INITRAMFS )) && initramfs_configure
-for old in $(dkms status -m "$ZX_NAME" 2>/dev/null | sed -n "s|^$ZX_NAME/\([^,]*\),.*|\1|p" | sort -u); do
+for old in $(dkms status -m "$ZX_NAME" 2>/dev/null | sed -n "s|^$ZX_NAME/\([^,:]*\)[,:].*|\1|p" | sort -u); do
 	dkms remove -m "$ZX_NAME" -v "$old" --all >/dev/null 2>&1 || true
 	rm -rf "/usr/src/$ZX_NAME-$old"
 done

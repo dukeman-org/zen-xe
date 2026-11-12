@@ -23,7 +23,7 @@ need_root "$@"
 detect_distro
 
 found=0
-for v in $(dkms status -m "$ZX_NAME" 2>/dev/null | sed -n "s|^$ZX_NAME/\([^,]*\),.*|\1|p" | sort -u); do
+for v in $(dkms status -m "$ZX_NAME" 2>/dev/null | sed -n "s|^$ZX_NAME/\([^,:]*\)[,:].*|\1|p" | sort -u); do
 	found=1
 	dkms remove -m "$ZX_NAME" -v "$v" --all && ok "removed DKMS $ZX_NAME/$v"
 	rm -rf "/usr/src/$ZX_NAME-$v"
