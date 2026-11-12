@@ -1,4 +1,4 @@
-# zen-xe patch series for Linux 7.2.y (base v7.2.9; verified on v7.2.9 and v7.2.10).
+# zen-xe patch series for Linux 7.2.y (base v7.2.9; verified on v7.2.9, v7.2.10 and v7.2.15).
 # One patch per line, applied in order with patch -p1. An optional constraint after the
 # name limits the patch to kernel sublevels: "<7.2.10" = only kernels older than 7.2.10.
 0001-drm-i915-dsb-shift-delayed-vblank-DSL-wait-start-by-.patch
@@ -8,5 +8,5 @@
 0005-drm-i915-cx0-request-TCSS-power-for-the-non-TC-C20-P.patch
 0006-zenbook-duo-module-parameter-for-the-TCSS.patch
 0007-drm-i915-xe-Enable-HPD-polling-later-during-system-r.patch
-0008-drm-xe-Fix-shrinker-accounting-double-subtraction-on.patch
+0008-drm-xe-Fix-shrinker-accounting-double-subtraction-on.patch	<7.2.11
 0009-drm-i915-display-Mask-RO-bits-in-gen9_write_dc_state.patch

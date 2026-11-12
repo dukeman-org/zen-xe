@@ -13,7 +13,7 @@ and `git am` sequentially on a v7.2.9 worktree (series-work/7.2.9-check), includ
 | 0005 | drm/i915/cx0: request TCSS power for the non-TC C20 PHY on PTL port B | patches-vrr-tcss/0005 | clean (git am -3) |
 | 0006 | zenbook-duo-2026-linux: module parameter for the TCSS change | patches-vrr-tcss/0006 | clean (git am -3) |
 | 0007 | drm/i915/xe: Enable HPD polling later during system resume | 3eb3190a0a1f | clean |
-| 0008 | drm/xe: Fix shrinker accounting double-subtraction on nested external pins | 83d5acca1f4f | clean (Fixes: 00c8efc3180f is an ancestor; the unconditional account_subtract in xe_bo_pin_external() is present) |
+| 0008 | drm/xe: Fix shrinker accounting double-subtraction on nested external pins | 83d5acca1f4f | **`<7.2.11` only**: already in v7.2.11 as ab39bc55cf08 (the build of 7.2.15-arch1-1 failed on it, 2026-11-12). Clean on v7.2.9/v7.2.10 (Fixes: 00c8efc3180f is an ancestor; the unconditional account_subtract in xe_bo_pin_external() is present) |
 | 0009 | drm/i915/display: Mask RO bits in gen9_write_dc_state() | 94c0b93dc2a5 | resolved: conflict only in intel_display_regs.h (upstream had meanwhile rewritten the DC_STATE_EN_UPTO_* defines as REG_FIELD_PREP). Kept the tree's defines, added only DC_STATE_EN_CSR_MASK_CMTG_1 (REG_BIT(11)) and _CMTG_0 (REG_BIT(10)). Code identical to patches-sweep/0009. |
 
 Bug-presence check: all touched code paths exist in v7.2.10/v7.2.9 (pre_commit_is_vrr_active()
@@ -40,3 +40,10 @@ Logs: build-logs/{olddefconfig,modules_prepare,xe}.log.
 
 sha256 (unstripped drivers/gpu/drm/xe/xe.ko in series-work/7.2):
 fb4bfbf784b0db6575a1a393e984a0c87f4e3976decef8a998557fee1b4f9bfa
+
+## v7.2.15 (2026-11-12)
+
+Checked v7.2.10..v7.2.15 for backports of every patch (upstream id in the commit message and the
+subject): only 0008 was backported (v7.2.11). With `<7.2.11` on 0008, build.sh against the
+v7.2.15-arch1 sources applied 0001-0003, 0005-0007, 0009 and built xe.ko for 7.2.15-arch1-1
+(vermagic and imported symbols verified by build.sh; `zenbook_duo_edp2_tcss` present).
